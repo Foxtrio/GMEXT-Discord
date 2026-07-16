@@ -1,6 +1,6 @@
 @echo off
 set Utils="%~dp0scriptUtils.bat"
-set ExtensionPath="%~dp0"
+set "ExtensionPath=%~dp0"
 
 :: ######################################################################################
 :: Script Logic
@@ -18,11 +18,7 @@ call %Utils% optionGetValue "linuxSdkPath" LINUX_SDK_PATH
 call %Utils% optionGetValue "androidSdkPath" ANDROID_SDK_PATH
 
 :: Ensure we are on the output path
-if "%YYTARGET_runtime%" == "GMRT" (
-    pushd "%YYoutputFolder%\build\assets"
-) else (
-    pushd "%YYoutputFolder%"
-)
+pushd "%YYoutputFolder%"
 
 :: Call setup method depending on the platform
 :: NOTE: the setup method can be (:setupWindows, :setupMacOS, :setupLinux, :setupAndroid, :setupiOS)
