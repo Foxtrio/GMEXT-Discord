@@ -70,6 +70,46 @@ exit /b 0
     if not exist "%IOS_DEST_DIR%" mkdir "%IOS_DEST_DIR%"
     mkdir "%IOS_TEMP%"
     call %Utils% itemCopyTo "%XCFRAMEWORK_SRC%" "%IOS_TEMP%\discord_partner_sdk.xcframework"
-    call %Utils% folderCompress "%IOS_TEMP%" "%IOS_ZIP%"
+
+    :: Fix restrictive permissions on framework bundles (Apple frameworks often have
+    :: read-only/inaccessible inner files that cause rsync to fail when copied to Mac)
+    attrib -R "%IOS_TEMP%\discord_partner_sdk.xcframework" /S
+
+    :: PowerShell Compress-Archive creates zips with Windows-style backslash paths and
+    :: no Unix permission bits. On macOS 'unzip' then creates directories without the
+    :: execute bit, so the later rsync cannot stat the .framework bundles. Build the
+    :: zip manually with forward slashes and Unix modes (755 dirs, 755 files).
+    set "PS_ZIP_HELPER=%IOS_DEST_DIR%\_zip_helper.ps1"
+    (
+        echo $src = '%IOS_TEMP%'
+        echo $dst = '%IOS_ZIP%'
+        echo if ^(Test-Path $dst^) { Remove-Item $dst -Force }
+        echo Add-Type -AssemblyName System.IO.Compression
+        echo Add-Type -AssemblyName System.IO.Compression.FileSystem
+        echo $zip = [System.IO.Compression.ZipFile]::Open^($dst, 'Create'^)
+        echo try {
+        echo     $base = ^(Resolve-Path $src^).Path
+        echo     $items = Get-ChildItem -Path $base -Recurse
+        echo     foreach ^($item in $items^) {
+        echo         $rel = $item.FullName.Substring^($base.Length + 1^).Replace^('\', '/'^)
+        echo         if ^($item.PSIsContainer^) {
+        echo             $e = $zip.CreateEntry^("$rel/"^)
+        echo             $e.ExternalAttributes = 0x41ED0000
+        echo         } else {
+        echo             $e = [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile^($zip, $item.FullName, $rel^)
+        echo             $e.ExternalAttributes = 0x81ED0000
+        echo         }
+        echo     }
+        echo } finally {
+        echo     $zip.Dispose^(^)
+        echo }
+    ) > "%PS_ZIP_HELPER%"
+
+    powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%PS_ZIP_HELPER%"
+    if %errorlevel% neq 0 (
+        call %Utils% logError "Failed to compress iOS xcframework zip with Unix permissions."
+    )
+
+    del "%PS_ZIP_HELPER%"
     call %Utils% itemDelete "%IOS_TEMP%"
 exit /b 0

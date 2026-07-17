@@ -57,6 +57,11 @@ setupiOS() {
     mkdir -p "$IOS_DEST_DIR"
     mkdir -p "$IOS_TEMP"
     itemCopyTo "$XCFRAMEWORK_SRC" "$IOS_TEMP/discord_partner_sdk.xcframework"
+
+    # Fix restrictive permissions on framework bundles (Apple frameworks often have
+    # read-only/inaccessible inner files that cause rsync to fail when copied to Mac)
+    chmod -R +rX "$IOS_TEMP/discord_partner_sdk.xcframework"
+
     folderCompress "$IOS_TEMP" "$IOS_ZIP"
     itemDelete "$IOS_TEMP"
 }
